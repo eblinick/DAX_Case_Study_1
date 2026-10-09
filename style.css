@@ -112,3 +112,21 @@ p code, li code { background: #eef1f5; padding: 1px 5px; border-radius: 4px; }
   .panel, .figure-block { padding: 16px; }
   th, td { padding: 8px 10px; }
 }
+
+/* Header banner with background image (index page) */
+.hero-banner {
+  margin: 24px 0 40px;
+  padding: 48px 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #f6f7f9 url("header-bg.jpg") right center / cover no-repeat;
+}
+.hero-banner .lead { max-width: 560px; }
+
+@media (max-width: 760px) {
+  .hero-banner {
+    padding: 28px 20px;
+    background-image: linear-gradient(rgba(246, 247, 249, .82), rgba(246, 247, 249, .82)), url("header-bg.jpg");
+  }
+  .hero-banner .lead { max-width: none; }
+}

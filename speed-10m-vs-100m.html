@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Speed: 10M vs 100M</title>
+<meta name="description" content="DAX Studio Server Timings for a slow Net Sales measure and two rewrites on 10M and 100M Contoso datasets.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">Elke Blinick <span>· DAX Optimization Case Studies</span></a>
+    <nav class="site-nav" aria-label="Case study pages">
+      <a href="index.html">Overview</a>
+      <a href="speed-10m-vs-100m.html" aria-current="page">1 · Speed</a>
+      <a href="result-accuracy.html">2 · Accuracy</a>
+      <a href="query-granularity.html">3 · Query design</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="hero">
+    <p class="eyebrow">Contoso · Page 1 of 3</p>
+    <h1>Speed: 10M vs 100M dataset</h1>
+    <p class="lead">Each measure runs in DAX Studio grouped by Year and Product Category. In each screenshot, the Server Timings for the <strong>10M dataset are on the left</strong> and for the <strong>100M dataset on the right</strong>.</p>
+  </div>
+
+  <section>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Measure</th><th>10M total</th><th>100M total</th><th>100M SE CPU</th><th>SE queries</th><th>vs. Slow (100M)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Net Sales Slow</td><td>127 ms</td><td class="slow">2,177 ms</td><td>7,984 ms</td><td>1</td><td>baseline</td></tr>
+          <tr><td>Net Sales Fast</td><td>43 ms</td><td class="fast">573 ms</td><td>1,969 ms</td><td>2</td><td>3.8x faster</td></tr>
+          <tr><td>Net Sales Faster</td><td>30 ms</td><td class="fast">550 ms</td><td>1,781 ms</td><td>2</td><td>4.0x faster</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="figure-block">
+      <h3>Net Sales Slow <span class="tag slow-tag">original</span></h3>
+      <figure>
+        <a href="SizeNetSalesSlow.jpg" target="_blank" rel="noopener"><img src="SizeNetSalesSlow.jpg" alt="DAX Studio query for Net Sales Slow with Server Timings: 10M 127 ms, 100M 2,177 ms" loading="lazy"></a>
+        <figcaption>Server Timings: 10M left, 100M right. Click to enlarge.</figcaption>
+      </figure>
+      <p>Total time rises from <strong>127 ms to 2,177 ms</strong> (17x). There's only one storage engine query, but its CPU time reaches 7,984 ms on 100M rows. The <code>IF</code> inside <code>SUMX</code> can't be resolved as a plain column scan, so the condition is evaluated row by row during the scan. Formula engine time stays at 6 to 7 ms because that row-by-row work is counted inside the storage engine query. The cost grows with every additional sales row.</p>
+    </div>
+
+    <div class="figure-block">
+      <h3>Net Sales Fast <span class="tag fast-tag">rewrite 1</span></h3>
+      <figure>
+        <a href="SizeNetSalesFast.jpg" target="_blank" rel="noopener"><img src="SizeNetSalesFast.jpg" alt="DAX Studio query for Net Sales Fast with Server Timings: 10M 43 ms, 100M 573 ms" loading="lazy"></a>
+        <figcaption>Server Timings: 10M left, 100M right. Click to enlarge.</figcaption>
+      </figure>
+      <p>Total time rises from <strong>43 ms to 573 ms</strong>. The measure calculates gross sales, then subtracts 10% of the sales with Quantity &gt; 5. That takes two simple storage engine queries, and the quantity condition becomes a filter the engine handles natively. On 100M rows, SE CPU is 1,969 ms, about 4x less than the original.</p>
+      <details>
+        <summary>Show measure</summary>
+<pre>Net Sales Fast =
+VAR GrossSales = SUMX ( Sales, Sales[Quantity] * Sales[Net Price] )
+VAR DiscountedBase =
+    CALCULATE ( SUMX ( Sales, Sales[Quantity] * Sales[Net Price] ),
+                KEEPFILTERS ( Sales[Quantity] &gt; 5 ) )
+RETURN GrossSales - DiscountedBase * 0.1</pre>
+      </details>
+    </div>
+
+    <div class="figure-block">
+      <h3>Net Sales Faster <span class="tag fast-tag">rewrite 2</span></h3>
+      <figure>
+        <a href="SizeNetSalesFaster.jpg" target="_blank" rel="noopener"><img src="SizeNetSalesFaster.jpg" alt="DAX Studio query for Net Sales Faster with Server Timings: 10M 30 ms, 100M 550 ms" loading="lazy"></a>
+        <figcaption>Server Timings: 10M left, 100M right. Click to enlarge.</figcaption>
+      </figure>
+      <p>Total time rises from <strong>30 ms to 550 ms</strong>. This version splits sales into regular (Quantity ≤ 5) and discount-eligible (Quantity &gt; 5) and applies the 0.9 factor once. It also uses two storage engine queries, and the timings are within about 5% of Net Sales Fast, which is run-to-run noise. Different DAX, essentially the same work for the engine.</p>
+      <details>
+        <summary>Show measure</summary>
+<pre>Net Sales Faster =
+VAR RegularSales =
+    CALCULATE ( SUMX ( Sales, Sales[Quantity] * Sales[Net Price] ),
+                KEEPFILTERS ( Sales[Quantity] &lt;= 5 ) )
+VAR DiscountEligibleSales =
+    CALCULATE ( SUMX ( Sales, Sales[Quantity] * Sales[Net Price] ),
+                KEEPFILTERS ( Sales[Quantity] &gt; 5 ) )
+RETURN RegularSales + DiscountEligibleSales * 0.9</pre>
+      </details>
+    </div>
+  </section>
+
+  <section>
+    <h2>Summary</h2>
+    <div class="callout">
+      <ul class="clean">
+        <li><strong>Both rewrites are about 4x faster on 100M rows</strong> (2,177 ms → 550 to 573 ms), with 4 to 4.5x less storage engine CPU.</li>
+        <li><strong>The gain comes from removing the row-by-row <code>IF</code>.</strong> Turning the condition into a filter lets the storage engine do plain, parallel column scans.</li>
+        <li><strong>Once the work is in the storage engine, further tuning adds little.</strong> Fast and Faster are effectively equal, so it's a good point to stop optimizing the DAX.</li>
+        <li><strong>All versions scale reasonably.</strong> The data grew about 22x (10M → 225M+ rows) and query times grew 13 to 18x. But at 100M rows, the original costs over 2 seconds for a small Year × Category table, and that cost lands on every visual that uses it.</li>
+      </ul>
+    </div>
+  </section>
+
+  <nav class="pager" aria-label="Page navigation">
+    <a href="index.html">← Overview</a>
+    <a href="result-accuracy.html">Page 2 · Accuracy →</a>
+  </nav>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>Elke Blinick · Business Intelligence Architect · Toronto</span>
+    <a href="https://eblinick.ca">eblinick.ca</a>
+  </div>
+</footer>
+
+</body>
+</html>

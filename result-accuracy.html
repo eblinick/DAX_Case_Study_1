@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Result Accuracy Check</title>
+<meta name="description" content="Do the optimized Net Sales measures return the same numbers as the original? A brand-level comparison on 10M and 100M Contoso data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">Elke Blinick <span>· DAX Optimization Case Studies</span></a>
+    <nav class="site-nav" aria-label="Case study pages">
+      <a href="index.html">Overview</a>
+      <a href="speed-10m-vs-100m.html">1 · Speed</a>
+      <a href="result-accuracy.html" aria-current="page">2 · Accuracy</a>
+      <a href="query-granularity.html">3 · Query design</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="hero">
+    <p class="eyebrow">Contoso · Page 2 of 3</p>
+    <h1>Accuracy: do the numbers match?</h1>
+    <p class="lead">A faster measure is only an improvement if it returns the same numbers. Each table shows Net Sales by brand for the original measure and the rewrites.</p>
+  </div>
+
+  <section>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Measure</th><th>10M total</th><th>100M total</th><th>Diff. to Slow (100M)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Net Sales Slow (original)</td><td>$9,878,057,758</td><td>$219,895,044,742</td><td>–</td></tr>
+          <tr><td>Net Sales Fast</td><td>$9,878,057,756</td><td>$219,895,044,706</td><td class="slow">−$36</td></tr>
+          <tr><td>Net Sales Faster</td><td>$9,878,057,756</td><td>$219,895,044,706</td><td class="slow">−$36</td></tr>
+          <tr><td>Net Sales Fast Exacter</td><td>–</td><td>$219,895,044,736</td><td>−$6</td></tr>
+          <tr><td>Net Sales Sum (calculated column)</td><td>–</td><td>$219,895,044,742</td><td class="fast">$0</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="figure-block">
+      <h3>10M dataset <span class="tag">Results10M</span></h3>
+      <figure>
+        <a href="Results10M.jpg" target="_blank" rel="noopener"><img src="Results10M.jpg" alt="Net Sales by brand on 10M rows: Slow total 9,878,057,758, Fast and Faster 9,878,057,756" loading="lazy"></a>
+        <figcaption>Left to right: Net Sales Slow, Net Sales Fast, Net Sales Faster. Click to enlarge.</figcaption>
+      </figure>
+      <p>Fast and Faster return identical values at every level. Compared with the original, the total is <strong>$2 lower</strong> ($9,878,057,756 vs. $9,878,057,758). At brand level, only Adventure Works and Wide World Importers differ, by $1 each. That's too small for any analysis to notice, but it doesn't reconcile.</p>
+    </div>
+
+    <div class="figure-block">
+      <h3>100M dataset <span class="tag">Results100MOrig</span></h3>
+      <figure>
+        <a href="Results100MOrig.jpg" target="_blank" rel="noopener"><img src="Results100MOrig.jpg" alt="Net Sales by brand on 100M rows: Slow total 219,895,044,742, Faster and Fast 219,895,044,706" loading="lazy"></a>
+        <figcaption>Left to right: Net Sales Slow, Net Sales Faster, Net Sales Fast. Click to enlarge.</figcaption>
+      </figure>
+      <p>With 22x more rows, the gap grows to <strong>$36</strong> ($219,895,044,742 vs. $219,895,044,706). The original is higher for 8 of 11 brands, by $1 to $10, and never lower. A consistent direction points to rounding that builds up row by row, not random noise. Fast and Faster still match each other exactly.</p>
+    </div>
+
+    <div class="figure-block">
+      <h3>A closer rewrite: Net Sales Fast Exacter <span class="tag">Results100MExacter</span></h3>
+      <figure>
+        <a href="Results100MExacter.jpg" target="_blank" rel="noopener"><img src="Results100MExacter.jpg" alt="Net Sales by brand on 100M rows: Slow 219,895,044,742, Fast Exact 219,895,044,736, Faster 219,895,044,706" loading="lazy"></a>
+        <figcaption>Left: Net Sales Slow. Middle: Net Sales Fast Exacter. Right: Net Sales Faster. Click to enlarge.</figcaption>
+      </figure>
+      <p>Fast Exacter applies the 0.9 factor <strong>per row</strong>, like the original, but inside a filter instead of an <code>IF</code>. The total is $219,895,044,736, only <strong>$6</strong> from the original instead of $36. It matches the original exactly for 7 of 11 brands and is within $2 on the rest. The remaining gap comes from the two engines doing the same arithmetic slightly differently.</p>
+      <details>
+        <summary>Show measure</summary>
+<pre>Net Sales Fast Exacter =
+VAR Discounted =
+    CALCULATE ( SUMX ( Sales, Sales[Quantity] * Sales[Net Price] * 0.9 ),
+                KEEPFILTERS ( Sales[Quantity] &gt; 5 ) )
+VAR RegularAmt =
+    CALCULATE ( SUMX ( Sales, Sales[Quantity] * Sales[Net Price] ),
+                KEEPFILTERS ( Sales[Quantity] &lt;= 5 ) )
+RETURN Discounted + RegularAmt</pre>
+      </details>
+    </div>
+
+    <div class="figure-block">
+      <h3>Pre-calculated per row: Net Sales Sum <span class="tag">Results100MCalcColMiddle</span></h3>
+      <figure>
+        <a href="Results100MCalcColMiddle.jpg" target="_blank" rel="noopener"><img src="Results100MCalcColMiddle.jpg" alt="Net Sales by brand on 100M rows: Slow 219,895,044,742, Net Sales Sum from a calculated column 219,895,044,742, Fast Exact 219,895,044,736" loading="lazy"></a>
+        <figcaption>Left: Net Sales Slow. Middle: Net Sales Sum (calculated column). Right: Net Sales Fast Exact. Click to enlarge.</figcaption>
+      </figure>
+      <p>The original row logic moves into a calculated column (<code>Sales[New Net]</code>), and the measure is a plain <code>SUM</code>. The result is <strong>identical to the original</strong>: $219,895,044,742 in total and the same value for all 11 brands. Each row's net amount is calculated once, the same way the original measure calculates it, and stored. Adding up stored values introduces no new rounding.</p>
+      <p>The column version is also the fastest one tested: 80 ms for the grand total compared with 2,123 ms for the original (see <a href="query-granularity.html">page 3</a>). For this case, it's the only approach that is both fast and matches the original to the dollar.</p>
+      <details>
+        <summary>Show column and measure</summary>
+<pre>// Calculated column on Sales: the original row logic, computed at refresh
+New Net =
+IF ( Sales[Quantity] &gt; 5,
+     Sales[Quantity] * Sales[Net Price] * 0.9,
+     Sales[Quantity] * Sales[Net Price] )
+
+// Measure
+Net Sales Sum = SUM ( Sales[New Net] )</pre>
+      </details>
+    </div>
+  </section>
+
+  <section>
+    <h2>Summary</h2>
+    <div class="callout">
+      <ul class="clean">
+        <li><strong>Where the discount is applied changes the cents.</strong> The original discounts each row and then adds them up. Fast and Faster add up first and apply the discount once. That's the same in exact math, but not in computer arithmetic. <code>Net Price</code> is a Fixed Decimal column, which stores 4 decimal places even when 2 are displayed.</li>
+        <li><strong>The difference is tiny but real:</strong> $36 on $219.9B, about 0.00000002%. It's irrelevant for trend analysis, but finance would ask why the report doesn't tie out to the ledger. Applying the discount per row in a faster measure (Fast Exact) narrows the gap to $6, but doesn't close it.</li>
+        <li><strong>Pre-calculating each row closes the gap.</strong> A calculated column with the original row logic, summed with <code>SUM</code>, matches the original at every level and is also the fastest version. The trade-offs are a larger model, longer refresh, and a discount rule that is fixed at refresh.</li>
+        <li><strong>Matching the original isn't the same as being correct.</strong> The original is just the number that existed first. The right check is an exact reconciliation against the source, such as a SQL query using DECIMAL arithmetic.</li>
+        <li><strong>Production recommendation:</strong> agree the rounding rule with finance (for example, discount per line rounded to the cent) and calculate <code>Net Amount</code> per line upstream in Power Query, Snowflake or Fabric. It works like the calculated column, but usually compresses better, keeps the logic in one governed place, and the measure stays a plain <code>SUM</code>: fast, consistent and auditable.</li>
+        <li><strong>The actual solution may depend on the needs/environment of a specific situation. One size/answer does not fit all (situations)</strong></li>
+	  </ul>
+    </div>
+  </section>
+
+  <nav class="pager" aria-label="Page navigation">
+    <a href="speed-10m-vs-100m.html">← Page 1 · Speed</a>
+    <a href="query-granularity.html">Page 3 · Query design →</a>
+  </nav>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>Elke Blinick · Business Intelligence Architect · Toronto</span>
+    <a href="https://eblinick.ca">eblinick.ca</a>
+  </div>
+</footer>
+
+</body>
+</html>

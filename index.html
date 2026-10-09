@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAX Optimization Case Studies</title>
+<meta name="description" content="DAX optimization case studies on public datasets by Elke Blinick, BI Architect: performance, accuracy and query design measured in DAX Studio.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">Elke Blinick <span>· DAX Optimization Case Studies</span></a>
+    <nav class="site-nav" aria-label="Case study pages">
+      <a href="index.html" aria-current="page">Overview</a>
+      <a href="speed-10m-vs-100m.html">1 · Speed</a>
+      <a href="result-accuracy.html">2 · Accuracy</a>
+      <a href="query-granularity.html">3 · Query design</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="hero">
+    <p class="eyebrow">Power BI · DAX · DAX Studio</p>
+    <h1>DAX optimization case studies</h1>
+    <p class="lead">Slow reports are rarely a visual problem. They're usually a model or measure problem. This case study is an example of the kind of work I do when looking to 
+	optimize a measure.</p>
+  </div>
+
+  <section>
+    <h2>Why public datasets</h2>
+    <div class="grid grid-3">
+      <div class="panel">
+        <h3>Client models stay private</h3>
+        <p>Companies don't publish their semantic models or data. The measures here are deliberately written the naive way, so the same problems can be shown on public data.</p>
+      </div>
+      <div class="panel">
+        <h3>Large, but simple</h3>
+        <p>Public datasets can have hundreds of millions of rows, but they're usually clean star schemas. Enterprise models often have 50+ tables, messy relationships and many more measures.</p>
+      </div>
+      <div class="panel">
+        <h3>DAX isn't always the fix</h3>
+        <p>Sometimes a measure can't be optimized any further because the limit is the data model or the report design. Knowing when to stop tuning DAX and change the model instead is part of the job.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Case study 1</p>
+    <h2>Contoso: optimizing a slow Net Sales measure</h2>
+    <div class="panel" style="margin-bottom:16px">
+      <p><strong>Business rule:</strong> order lines with a quantity above 5 get a 10% discount. The original measure applies the rule with an <code>IF</code> inside <code>SUMX</code>, which forces the engine to evaluate every sales row one at a time. Three rewrites move the rule into filters instead, and all versions are tested on a 10M and a 100M Contoso dataset.</p>
+      <details>
+        <summary>Show the original measure</summary>
+<pre>Net Sales Slow =
+SUMX ( Sales,
+    IF ( Sales[Quantity] &gt; 5,
+         Sales[Quantity] * Sales[Net Price] * 0.9,
+         Sales[Quantity] * Sales[Net Price] ) )</pre>
+      </details>
+    </div>
+
+    <div class="table-wrap" style="margin-bottom:16px">
+      <table>
+        <thead>
+          <tr><th>Dataset</th><th>Sales records</th><th>Products</th><th>Customers</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Contoso 10M</td><td>10,000,000</td><td>2,500</td><td>1,500,000</td></tr>
+          <tr><td>Contoso 100M</td><td>225,000,000+</td><td>2,500</td><td>1,800,000+</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="stats" style="margin-bottom:16px">
+      <div class="stat"><div class="value fast">~4x</div><div class="label">faster on 100M rows (2,177 ms → 550 ms, Year × Category query)</div></div>
+      <div class="stat"><div class="value">$36</div><div class="label">difference on a $219.9B total: how the discount is applied changes the cents</div></div>
+      <div class="stat"><div class="value slow">10–16 s</div><div class="label">for every version on a customer-level matrix, even a pre-calculated column: the visual itself becomes the bottleneck</div></div>
+    </div>
+
+    <h3 style="margin-top:28px">Three views of the results</h3>
+    <div class="grid grid-3">
+      <a class="panel card-link" href="speed-10m-vs-100m.html">
+        <div class="card-num">Page 1</div>
+        <h3>Speed: 10M vs 100M rows</h3>
+        <p>Server Timings for the original measure and two rewrites, run in DAX Studio on both datasets.</p>
+        <span class="more">View timings →</span>
+      </a>
+      <a class="panel card-link" href="result-accuracy.html">
+        <div class="card-num">Page 2</div>
+        <h3>Accuracy: do the numbers match?</h3>
+        <p>The faster measures agree with each other, but not with the original to the dollar. Why, and why it matters to finance.</p>
+        <span class="more">View results →</span>
+      </a>
+      <a class="panel card-link" href="query-granularity.html">
+        <div class="card-num">Page 3</div>
+        <h3>Query design: total vs. real visual</h3>
+        <p>The same measures timed as a single total, by Year × Category, and as a real customer-level matrix.</p>
+        <span class="more">View query tests →</span>
+      </a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Method</h2>
+    <div class="callout">
+      <ul class="clean">
+        <li>Tools: Power BI Desktop, Performance Analyzer and DAX Studio (Server Timings).</li>
+        <li>Each query run with a cleared cache (SE Cache = 0 in every screenshot), so results reflect a cold engine.</li>
+        <li>Every rewrite is checked for both speed <em>and</em> identical results. A faster measure that changes the numbers isn't finished.</li>
+        <li>Timings are single runs on one laptop. Differences under about 10% are treated as noise.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>Elke Blinick · Business Intelligence Architect · Toronto</span>
+    <a href="https://eblinick.ca">eblinick.ca</a>
+  </div>
+</footer>
+
+</body>
+</html>

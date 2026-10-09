@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Query Design Comparison</title>
+<meta name="description" content="How the shape of a query changes DAX Studio Server Timings: measure only, Year by Category, and a real customer-level Power BI matrix.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">Elke Blinick <span>· DAX Optimization Case Studies</span></a>
+    <nav class="site-nav" aria-label="Case study pages">
+      <a href="index.html">Overview</a>
+      <a href="speed-10m-vs-100m.html">1 · Speed</a>
+      <a href="result-accuracy.html">2 · Accuracy</a>
+      <a href="query-granularity.html" aria-current="page">3 · Query design</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="hero">
+    <p class="eyebrow">Contoso 100M · Page 3 of 3</p>
+    <h1>Query design: grand total vs. a real visual</h1>
+    <p class="lead">The same measure can look fast or slow depending on the query used to test it. Each screenshot shows the measure-only query on the left, followed by three Server Timings panels.</p>
+  </div>
+
+  <section>
+    <div class="grid grid-3" style="margin-bottom:20px">
+      <div class="panel"><div class="card-num">Timing 1</div><h3>Measure only</h3><p><code>SUMMARIZECOLUMNS</code> with just the measure: one number for the whole table.</p></div>
+      <div class="panel"><div class="card-num">Timing 2</div><h3>Year × Category</h3><p>The measure grouped by <code>'Date'[Year]</code> and <code>'Product'[Category]</code>: a small table.</p></div>
+      <div class="panel"><div class="card-num">Timing 3</div><h3>Real matrix</h3><p>The query copied from Performance Analyzer: 4 years in columns, Product Category and Customer Name in rows.</p></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Measure</th><th>Measure only</th><th>Year × Category</th><th>Customer matrix</th><th>Matrix FE share</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Net Sales Slow</td><td class="slow">2,123 ms</td><td class="slow">2,441 ms</td><td class="slow">15,760 ms</td><td>47.6%</td></tr>
+          <tr><td>Net Sales Fast</td><td class="fast">257 ms</td><td class="fast">550 ms</td><td>13,090 ms</td><td>80.8%</td></tr>
+          <tr><td>Net Sales Fast Exact</td><td class="fast">400 ms</td><td class="fast">757 ms</td><td>12,925 ms</td><td>79.4%</td></tr>
+          <tr><td>Net Sales Sum (calculated column)</td><td class="fast">80 ms</td><td class="fast">290 ms</td><td class="fast">10,056 ms</td><td>81.2%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="figure-block">
+      <h3>Net Sales Slow <span class="tag slow-tag">original</span></h3>
+      <figure>
+        <a href="QueryNetSalesSlow.jpg" target="_blank" rel="noopener"><img src="QueryNetSalesSlow.jpg" alt="Net Sales Slow Server Timings: measure only 2,123 ms, Year by Category 2,441 ms, customer matrix 15,760 ms" loading="lazy"></a>
+        <figcaption>Measure only · Year × Category · customer matrix. Click to enlarge.</figcaption>
+      </figure>
+      <p>The grand total alone already takes <strong>2,123 ms</strong>, and grouping by Year × Category adds only about 15%. The cost comes from evaluating every sales row, not from the number of cells in the result. On the customer matrix, the query grows to <strong>15,760 ms</strong> with 6 storage engine queries, split almost evenly between the formula engine (7.5 s) and the storage engine (8.3 s).</p>
+    </div>
+
+    <div class="figure-block">
+      <h3>Net Sales Fast <span class="tag fast-tag">rewrite</span></h3>
+      <figure>
+        <a href="QueryNetSalesFast.jpg" target="_blank" rel="noopener"><img src="QueryNetSalesFast.jpg" alt="Net Sales Fast Server Timings: measure only 257 ms, Year by Category 550 ms, customer matrix 13,090 ms" loading="lazy"></a>
+        <figcaption>Measure only · Year × Category · customer matrix. Click to enlarge.</figcaption>
+      </figure>
+      <p>The total takes <strong>257 ms</strong>, about 8x faster than the original. Grouping doubles it to 550 ms, because the storage engine now has to join to the Date and Product tables and group the results. On the customer matrix it reaches <strong>13,090 ms</strong>, and 81% of that is formula engine time. The bottleneck has moved from the measure to the size of the visual.</p>
+    </div>
+
+    <div class="figure-block">
+      <h3>Net Sales Fast Exact <span class="tag fast-tag">rewrite, per-row discount</span></h3>
+      <figure>
+        <a href="QueryNetSalesFastExacter.jpg" target="_blank" rel="noopener"><img src="QueryNetSalesFastExacter.jpg" alt="Net Sales Fast Exact Server Timings: measure only 400 ms, Year by Category 757 ms, customer matrix 12,925 ms" loading="lazy"></a>
+        <figcaption>Measure only · Year × Category · customer matrix. Click to enlarge.</figcaption>
+      </figure>
+      <p>This version is somewhat slower than Fast on small queries (<strong>400 ms</strong> and 757 ms), because multiplying by 0.9 on every row adds storage engine CPU (1,265 ms vs. 938 ms for the total). It's still about 5x faster than the original. On the customer matrix, it's practically the same as Fast at <strong>12,925 ms</strong>, again about 80% formula engine.</p>
+    </div>
+
+    <div class="figure-block">
+      <h3>Net Sales Sum <span class="tag fast-tag">calculated column + SUM</span></h3>
+      <figure>
+        <a href="QueryNetSalesCC.jpg" target="_blank" rel="noopener"><img src="QueryNetSalesCC.jpg" alt="Net Sales Sum Server Timings: measure only 80 ms, Year by Category 290 ms, customer matrix 10,056 ms" loading="lazy"></a>
+        <figcaption>Measure only · Year × Category · customer matrix. Click to enlarge.</figcaption>
+      </figure>
+      <p>Here the discount logic from the original measure moves into a calculated column (<code>Sales[New Net]</code>), computed once per row at refresh. The measure is just a <code>SUM</code>. The total takes <strong>80 ms</strong> with a single storage engine query, about <strong>26x faster than the original</strong> and 3x faster than Fast. Year × Category takes 290 ms, still one storage engine query. On the customer matrix, it's the fastest version at <strong>10,056 ms</strong>, with only 2 storage engine queries and 1,895 ms of storage engine time. The formula engine still accounts for 81% (8.2 s), because the size of the visual hasn't changed.</p>
+      <p>The speed isn't free: the work moves from query time to refresh time, and a new decimal column on 225M+ rows adds memory to the model. The discount rule is also fixed at refresh, so users can't change it with a slicer.</p>
+      <details>
+        <summary>Show column and measure</summary>
+<pre>// Calculated column on Sales: the original row logic, computed at refresh
+New Net =
+IF ( Sales[Quantity] &gt; 5,
+     Sales[Quantity] * Sales[Net Price] * 0.9,
+     Sales[Quantity] * Sales[Net Price] )
+
+// Measure
+Net Sales Sum = SUM ( Sales[New Net] )</pre>
+      </details>
+    </div>
+  </section>
+
+  <section>
+    <h2>Summary</h2>
+    <div class="callout">
+      <ul class="clean">
+        <li><strong>A grand-total query flatters the optimized measures.</strong> On the total, the DAX rewrites are 5 to 8x faster than the original and the calculated column is 26x faster. On the real customer matrix, the advantage drops to 1.2x for the rewrites and 1.6x for the calculated column (15.8 s vs. 12.9 to 13.1 s vs. 10.1 s).</li>
+        <li><strong>On a large visual, the bottleneck moves.</strong> For every optimized version, about 80% of the matrix time is formula engine work: sorting, subtotals and assembling hundreds of thousands of customer × year cells. Even a plain <code>SUM</code> spends 8.2 s there, so that cost doesn't depend on how the measure is written.</li>
+        <li><strong>Pre-calculating the value wins at every level.</strong> The calculated column needs the fewest storage engine queries (1, and 2 on the matrix) and the least storage engine CPU. The cost moves to refresh time and model memory, and the rule is fixed at refresh. In production, the same column is better created upstream (Power Query, Snowflake or Fabric), where it can also apply the rounding rule finance agrees on.</li>
+        <li><strong>Benchmark with the query the visual actually sends.</strong> Copying the query from Performance Analyzer into DAX Studio shows what users will really wait for. The simple queries explain <em>why</em> it's fast or slow.</li>
+        <li><strong>The last fix isn't in the DAX.</strong> A matrix listing 1.8M customers is slow by design: even the best version takes 10 seconds. Show categories or a Top N list, and put customer detail on a drill-through page.</li>
+      </ul>
+    </div>
+  </section>
+
+  <nav class="pager" aria-label="Page navigation">
+    <a href="result-accuracy.html">← Page 2 · Accuracy</a>
+    <a href="index.html">Back to overview →</a>
+  </nav>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>Elke Blinick · Business Intelligence Architect · Toronto</span>
+    <a href="https://eblinick.ca">eblinick.ca</a>
+  </div>
+</footer>
+
+</body>
+</html>
